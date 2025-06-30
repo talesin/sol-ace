@@ -2,14 +2,24 @@ import { Data, Effect, Layer } from 'effect'
 import { HttpClient } from '@effect/platform'
 import * as Schema from 'effect/Schema'
 
+// CoinGecko Error Schema
+const CoinGeckoErrorSchema = Schema.Struct({
+  status: Schema.Struct({
+    error_code: Schema.Number,
+    error_message: Schema.String
+  })
+})
+
 // Errors
 export class GetPriceError extends Data.TaggedError('GetPriceError')<{
   message: string
+  statusCode?: number
   readonly cause: unknown
 }> {}
 
 export class GetHistoricalDataError extends Data.TaggedError('GetHistoricalDataError')<{
   message: string
+  statusCode?: number
   readonly cause: unknown
 }> {}
 
@@ -43,31 +53,98 @@ export class PriceService extends Effect.Service<PriceService>()('PriceService',
     const getPrice = () =>
       httpClient.get(CoingeckoUrl).pipe(
         Effect.flatMap((res) => res.json),
-        Effect.flatMap(Schema.decodeUnknown(CoingeckoResponse)), // Use decodeUnknown for safety
-        Effect.map((res) => res.solana.usd),
-        Effect.mapError(
-          (cause) => new GetPriceError({ message: `Failed to fetch price: ${cause}`, cause })
-        )
+        Effect.flatMap((rawResponse) => {
+          // Try to decode as a successful response
+          return Schema.decodeUnknown(CoingeckoResponse)(rawResponse).pipe(
+            Effect.map((res) => res.solana.usd),
+            // If decoding as a successful response fails, try to decode as an error
+            Effect.catchAll(() => {
+              return Schema.decodeUnknown(CoinGeckoErrorSchema)(rawResponse).pipe(
+                Effect.match({
+                  onSuccess: (errorRes) => {
+                    return Effect.fail(
+                      new GetPriceError({
+                        message: `CoinGecko API Error: ${errorRes.status.error_message}`,
+                        statusCode: errorRes.status.error_code,
+                        cause: errorRes
+                      })
+                    )
+                  },
+                  // If it's not a standard CoinGecko error either, return generic error
+                  onFailure: () => {
+                    return Effect.fail(
+                      new GetPriceError({
+                        message: `Failed to fetch price: Unknown response format`,
+                        cause: rawResponse
+                      })
+                    )
+                  }
+                })
+              )
+            })
+          )
+        }),
+
+        Effect.mapError((cause) => {
+          if (cause instanceof GetPriceError) {
+            return cause
+          }
+          return new GetPriceError({
+            message: `Failed to fetch price: ${cause}`,
+            cause
+          })
+        })
       )
 
     const getHistoricalPrices = () =>
       httpClient.get(CoingeckoHistoricalUrl).pipe(
         Effect.flatMap((res) => res.json),
-        Effect.flatMap(Schema.decodeUnknown(HistoricalDataResponse)),
-        Effect.map((data): HistoricalPriceData => {
-          // Transform the array of [timestamp, price] pairs into array of objects
-          return data.prices.map(([timestamp, price]) => ({
-            timestamp: new Date(timestamp),
-            price
-          }))
-        }),
-        Effect.mapError(
-          (cause) =>
-            new GetHistoricalDataError({
-              message: `Failed to fetch historical data: ${cause}`,
-              cause
+        Effect.flatMap((rawResponse) => {
+          // Try to decode as a successful response
+          return Schema.decodeUnknown(HistoricalDataResponse)(rawResponse).pipe(
+            Effect.map(
+              (res): HistoricalPriceData =>
+                res.prices.map(([timestamp, price]) => ({
+                  timestamp: new Date(timestamp),
+                  price
+                }))
+            ),
+            // If decoding as a successful response fails, try to decode as an error
+            Effect.catchAll(() => {
+              return Schema.decodeUnknown(CoinGeckoErrorSchema)(rawResponse).pipe(
+                Effect.match({
+                  onSuccess: (errorRes) => {
+                    return Effect.fail(
+                      new GetHistoricalDataError({
+                        message: `CoinGecko API Error: ${errorRes.status.error_message}`,
+                        statusCode: errorRes.status.error_code,
+                        cause: errorRes
+                      })
+                    )
+                  },
+                  // If it's not a standard CoinGecko error either, return generic error
+                  onFailure: () => {
+                    return Effect.fail(
+                      new GetHistoricalDataError({
+                        message: `Failed to fetch historical data: Unknown response format`,
+                        cause: rawResponse
+                      })
+                    )
+                  }
+                })
+              )
             })
-        )
+          )
+        }),
+        Effect.mapError((cause) => {
+          if (cause instanceof GetHistoricalDataError) {
+            return cause
+          }
+          return new GetHistoricalDataError({
+            message: `Failed to fetch historical data: ${cause}`,
+            cause
+          })
+        })
       )
 
     return {
