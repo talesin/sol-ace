@@ -68,6 +68,35 @@ export const TestExampleServiceLayer = (fn?: {
   )
 ```
 
+## HTTP Requests with Effect
+
+Setup the function to fetch a URL with some simple currying. This allows the HttpClient to be injected at runtime.
+
+```typescript
+import { HttpClient } from '@effect/platform'
+import { HttpClientError } from '@effect/platform/HttpClientError'
+
+export const fetchUrl = (httpClient: HttpClient.HttpClient) =>
+  Effect.fn(function* (url: string) {
+    const response = yield* httpClient.get(url)
+    const text = yield* response.text
+
+    return text
+  })
+```
+
+When running this you will need to do something similar to the following to provide the HttpClient
+
+```typescript
+const program = Effect.gen(function* () {
+  const httpClient = yield* HttpClient
+  const response = yield* fetchUrl(httpClient)('https://example.com')
+  Effect.log(response)
+})
+
+program.pipe(Effect.provide(FetchHttpClient.layer), Effect.runPromise)
+```
+
 # Rust
 
 Rust commands must not expose unsafe code.
