@@ -11,6 +11,21 @@ import './App.css'
 import { Effect, Exit, Cause, Layer } from 'effect'
 import { FetchHttpClient } from '@effect/platform'
 
+// Chart rendering types
+type ChartDimensions = {
+  width: number
+  height: number
+  padding: number
+  innerWidth: number
+  innerHeight: number
+}
+
+type PriceRange = {
+  min: number
+  max: number
+  range: number
+}
+
 function App() {
   const [price, setPrice] = useState<number | undefined>(undefined)
   const [error, setError] = useState<GetPriceError | undefined>(undefined)
@@ -20,8 +35,20 @@ function App() {
   )
   const chartRef = useRef<HTMLCanvasElement>(null)
 
+  // Data fetching effect
   useEffect(() => {
-    // Setup service layers
+    fetchInitialData()
+    const interval = setupPriceRefreshInterval()
+    return () => clearInterval(interval)
+  }, [])
+
+  // Chart rendering effect
+  useEffect(() => {
+    if (historicalData) renderHistoricalChart()
+  }, [historicalData])
+
+  // Data fetching functions
+  const fetchInitialData = () => {
     const serviceLayer = Layer.provideMerge(PriceService.Default, FetchHttpClient.layer)
 
     // Current price program
@@ -33,137 +60,192 @@ function App() {
       Effect.runPromiseExit
     )
 
-    const fetchCurrentPrice = () => {
-      priceProgram.then((exit: Exit.Exit<number, GetPriceError>) => {
-        if (Exit.isSuccess(exit)) {
-          setPrice(exit.value)
-          setError(undefined)
-        } else if (Cause.isFailType(exit.cause)) {
-          if (exit.cause.error instanceof GetPriceError) {
-            setError(exit.cause.error)
-          }
-          console.error(Cause.pretty(exit.cause))
+    fetchCurrentPrice(priceProgram)
+    fetchHistoricalData(historicalProgram)
+  }
+
+  const setupPriceRefreshInterval = () => {
+    return setInterval(() => {
+      const serviceLayer = Layer.provideMerge(PriceService.Default, FetchHttpClient.layer)
+      const priceProgram = getSolPrice().pipe(Effect.provide(serviceLayer), Effect.runPromiseExit)
+      fetchCurrentPrice(priceProgram)
+    }, 60000) // Refresh price every 60 seconds
+  }
+
+  const fetchCurrentPrice = (priceProgram: Promise<Exit.Exit<number, GetPriceError>>) => {
+    priceProgram.then((exit: Exit.Exit<number, GetPriceError>) => {
+      if (Exit.isSuccess(exit)) {
+        setPrice(exit.value)
+        setError(undefined)
+      } else if (Cause.isFailType(exit.cause)) {
+        if (exit.cause.error instanceof GetPriceError) {
+          setError(exit.cause.error)
         }
-      })
+        console.error(Cause.pretty(exit.cause))
+      }
+    })
+  }
+
+  const fetchHistoricalData = (
+    historicalProgram: Promise<Exit.Exit<HistoricalPriceData, GetHistoricalDataError>>
+  ) => {
+    historicalProgram.then((exit: Exit.Exit<HistoricalPriceData, GetHistoricalDataError>) => {
+      if (Exit.isSuccess(exit)) {
+        setHistoricalData(exit.value)
+        setHistoricalError(undefined)
+      } else if (Cause.isFailType(exit.cause)) {
+        if (exit.cause.error instanceof GetHistoricalDataError) {
+          setHistoricalError(exit.cause.error)
+        }
+        console.error(Cause.pretty(exit.cause))
+      }
+    })
+  }
+
+  // Chart rendering functions
+  const renderHistoricalChart = () => {
+    if (!historicalData || !chartRef.current) return
+
+    const canvas = chartRef.current
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    // Skip if no data
+    if (historicalData.length === 0) return
+
+    const dimensions = getChartDimensions(canvas)
+    const priceRange = calculatePriceRange(historicalData)
+
+    // Prepare canvas
+    ctx.clearRect(0, 0, dimensions.width, dimensions.height)
+
+    // Draw the chart components
+    setupChartStyle(ctx)
+    drawAxes(ctx, dimensions)
+    plotDataPoints(ctx, historicalData, dimensions, priceRange)
+    addPriceLabels(ctx, priceRange, dimensions)
+    addDateLabels(ctx, historicalData, dimensions)
+  }
+
+  const getChartDimensions = (canvas: HTMLCanvasElement): ChartDimensions => {
+    const width = canvas.width
+    const height = canvas.height
+    const padding = 20
+
+    return {
+      width,
+      height,
+      padding,
+      innerWidth: width - 2 * padding,
+      innerHeight: height - 2 * padding
     }
+  }
 
-    const fetchHistoricalData = () => {
-      historicalProgram.then((exit: Exit.Exit<HistoricalPriceData, GetHistoricalDataError>) => {
-        if (Exit.isSuccess(exit)) {
-          setHistoricalData(exit.value)
-          setHistoricalError(undefined)
-        } else if (Cause.isFailType(exit.cause)) {
-          if (exit.cause.error instanceof GetHistoricalDataError) {
-            setHistoricalError(exit.cause.error)
-          }
-          console.error(Cause.pretty(exit.cause))
-        }
-      })
+  const calculatePriceRange = (data: HistoricalPriceData): PriceRange => {
+    // Extract price values for min/max calculation
+    const prices = data.map((item) => item.price)
+    const min = Math.min(...prices)
+    const max = Math.max(...prices)
+
+    return {
+      min,
+      max,
+      range: max - min
     }
+  }
 
-    // Fetch both current and historical data
-    fetchCurrentPrice()
-    fetchHistoricalData()
+  const setupChartStyle = (ctx: CanvasRenderingContext2D) => {
+    ctx.lineWidth = 2
+    ctx.strokeStyle = '#8884d8'
+    ctx.fillStyle = '#8884d8'
+  }
 
-    // Only refresh current price periodically
-    const interval = setInterval(fetchCurrentPrice, 60000) // Refresh every 60 seconds
+  const drawAxes = (ctx: CanvasRenderingContext2D, dimensions: ChartDimensions) => {
+    const { width, height, padding } = dimensions
 
-    return () => clearInterval(interval)
-  }, [])
+    ctx.beginPath()
+    ctx.moveTo(padding, padding)
+    ctx.lineTo(padding, height - padding) // Y axis
+    ctx.lineTo(width - padding, height - padding) // X axis
+    ctx.stroke()
+  }
 
-  // Draw the chart whenever historical data changes
-  useEffect(() => {
-    if (historicalData && chartRef.current) {
-      const canvas = chartRef.current
-      const ctx = canvas.getContext('2d')
+  const plotDataPoints = (
+    ctx: CanvasRenderingContext2D,
+    data: HistoricalPriceData,
+    dimensions: ChartDimensions,
+    priceRange: PriceRange
+  ) => {
+    const { padding, innerHeight, innerWidth } = dimensions
+    const { min, range } = priceRange
 
-      if (!ctx) return
+    ctx.beginPath()
+    data.forEach((dataPoint, index) => {
+      const x = padding + (index / (data.length - 1)) * innerWidth
+      const normalizedPrice = range ? (dataPoint.price - min) / range : 0.5
+      const y = dimensions.height - padding - normalizedPrice * innerHeight
 
-      const width = canvas.width
-      const height = canvas.height
+      if (index === 0) {
+        ctx.moveTo(x, y)
+      } else {
+        ctx.lineTo(x, y)
+      }
+    })
+    ctx.stroke()
+  }
 
-      // Clear canvas
-      ctx.clearRect(0, 0, width, height)
+  const addPriceLabels = (
+    ctx: CanvasRenderingContext2D,
+    priceRange: PriceRange,
+    dimensions: ChartDimensions
+  ) => {
+    const { padding, height } = dimensions
+    const { min, max } = priceRange
 
-      // Skip if no data
-      if (historicalData.length === 0) return
+    ctx.fillStyle = '#333'
+    ctx.font = '12px Arial'
+    ctx.textAlign = 'right'
+    ctx.fillText(`$${max.toFixed(2)}`, padding - 5, padding + 5)
+    ctx.fillText(`$${min.toFixed(2)}`, padding - 5, height - padding)
+  }
 
-      // Extract price values for min/max calculation
-      const prices = historicalData.map((item) => item.price)
-      // Find min and max for scaling
-      const minPrice = Math.min(...prices)
-      const maxPrice = Math.max(...prices)
-      const priceRange = maxPrice - minPrice
+  const addDateLabels = (
+    ctx: CanvasRenderingContext2D,
+    data: HistoricalPriceData,
+    dimensions: ChartDimensions
+  ) => {
+    const { padding, width, height } = dimensions
 
-      // Padding
-      const padding = 20
-      const innerHeight = height - 2 * padding
-      const innerWidth = width - 2 * padding
+    if (data.length > 0) {
+      const firstDataPoint = data[0]
+      const lastDataPoint = data[data.length - 1]
 
-      // Style
-      ctx.lineWidth = 2
-      ctx.strokeStyle = '#8884d8'
-      ctx.fillStyle = '#8884d8'
+      if (firstDataPoint && lastDataPoint) {
+        const firstDate = firstDataPoint.timestamp
+        const lastDate = lastDataPoint.timestamp
 
-      // Draw axes
-      ctx.beginPath()
-      ctx.moveTo(padding, padding)
-      ctx.lineTo(padding, height - padding)
-      ctx.lineTo(width - padding, height - padding)
-      ctx.stroke()
+        ctx.fillStyle = '#333'
+        ctx.textAlign = 'left'
+        ctx.fillText(firstDate.toLocaleDateString(), padding, height - padding + 15)
 
-      // Plot points
-      ctx.beginPath()
-      historicalData.forEach((dataPoint, index) => {
-        const x = padding + (index / (historicalData.length - 1)) * innerWidth
-        const normalizedPrice = priceRange ? (dataPoint.price - minPrice) / priceRange : 0.5
-        const y = height - padding - normalizedPrice * innerHeight
-
-        if (index === 0) {
-          ctx.moveTo(x, y)
-        } else {
-          ctx.lineTo(x, y)
-        }
-      })
-      ctx.stroke()
-
-      // Add price labels
-      ctx.fillStyle = '#333'
-      ctx.font = '12px Arial'
-      ctx.textAlign = 'right'
-      ctx.fillText(`$${maxPrice.toFixed(2)}`, padding - 5, padding + 5)
-      ctx.fillText(`$${minPrice.toFixed(2)}`, padding - 5, height - padding)
-
-      // Add date labels (first and last)
-      if (historicalData.length > 0) {
-        const firstDataPoint = historicalData[0]
-        const lastDataPoint = historicalData[historicalData.length - 1]
-
-        if (firstDataPoint && lastDataPoint) {
-          const firstDate = firstDataPoint.timestamp
-          const lastDate = lastDataPoint.timestamp
-
-          ctx.textAlign = 'left'
-          ctx.fillText(firstDate.toLocaleDateString(), padding, height - padding + 15)
-
-          ctx.textAlign = 'right'
-          ctx.fillText(lastDate.toLocaleDateString(), width - padding, height - padding + 15)
-        }
+        ctx.textAlign = 'right'
+        ctx.fillText(lastDate.toLocaleDateString(), width - padding, height - padding + 15)
       }
     }
-  }, [historicalData])
+  }
 
+  // UI Rendering functions
   const renderPriceContent = () => {
     if (error) {
       return <p className="error">Error fetching price</p>
+    } else if (price === undefined) {
+      return <p className="loading">Loading...</p>
+    } else {
+      return <p className="price">${price.toFixed(2)}</p>
     }
-    if (price !== undefined) {
-      return <h1 className="price">${price.toFixed(2)}</h1>
-    }
-    return <p className="loading">Loading price...</p>
   }
 
-  const renderChart = () => {
+  const renderChartSection = () => {
     if (historicalError) {
       return <p className="error">Error fetching historical data</p>
     }
@@ -174,15 +256,16 @@ function App() {
     return (
       <div className="chart-container">
         <h2>30-Day Price History</h2>
-        <canvas ref={chartRef} width="600" height="300" className="price-chart" />
+        <canvas ref={chartRef} width={600} height={300} className="price-chart" />
       </div>
     )
   }
 
+  // Main component render
   return (
     <main className="container">
       <div className="price-container">{renderPriceContent()}</div>
-      <div className="chart-section">{renderChart()}</div>
+      <div className="chart-section">{renderChartSection()}</div>
     </main>
   )
 }
