@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "sol-ace",
-        "width": 800,
-        "height": 600
+        "title": "SOL",
+        "width": 1200,
+        "height": 800
       }
     ],
     "security": {
