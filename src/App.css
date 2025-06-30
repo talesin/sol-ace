@@ -15,10 +15,42 @@ body,
 
 .container {
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   height: 100vh;
   text-align: center;
+  padding: 20px;
+}
+
+.price-container {
+  margin-bottom: 30px;
+}
+
+.chart-section {
+  width: 100%;
+  max-width: 800px;
+}
+
+.chart-container {
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.price-chart {
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+  border-radius: 4px;
+}
+
+.chart-container h2 {
+  font-size: 1.2rem;
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #8884d8;
 }
 
 h1 {
