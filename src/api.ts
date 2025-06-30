@@ -58,7 +58,7 @@ export class PriceService extends Effect.Service<PriceService>()('PriceService',
           return Schema.decodeUnknown(CoingeckoResponse)(rawResponse).pipe(
             Effect.map((res) => res.solana.usd),
             // If decoding as a successful response fails, try to decode as an error
-            Effect.catchAll(() => {
+            Effect.mapError(() => {
               return Schema.decodeUnknown(CoinGeckoErrorSchema)(rawResponse).pipe(
                 Effect.match({
                   onSuccess: (errorRes) => {
@@ -110,7 +110,7 @@ export class PriceService extends Effect.Service<PriceService>()('PriceService',
                 }))
             ),
             // If decoding as a successful response fails, try to decode as an error
-            Effect.catchAll(() => {
+            Effect.mapError(() => {
               return Schema.decodeUnknown(CoinGeckoErrorSchema)(rawResponse).pipe(
                 Effect.match({
                   onSuccess: (errorRes) => {
