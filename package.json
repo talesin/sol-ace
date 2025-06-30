@@ -14,13 +14,12 @@
     "test": "jest"
   },
   "dependencies": {
-    "@effect/cli": "^0.63.4",
-    "@effect/platform": "^0.84.3",
-    "@effect/platform-node": "^0.83.3",
+    "@effect/platform": "^0.87.0",
+    "@effect/platform-browser": "^0.67.1",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-http": "^2.5.0",
     "@tauri-apps/plugin-opener": "^2",
-    "effect": "^3.14.14",
+    "effect": "^3.16.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "ts-essentials": "^10.0.4"
