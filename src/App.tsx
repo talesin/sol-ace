@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { GetPriceError, GetHistoricalDataError, HistoricalPriceData } from './PriceService'
 import './App.css'
-import { renderHistoricalChart } from './ChartUtils'
+import { PriceHistoryChart } from './ChartUtils'
 import { fetchInitialData, setupPriceRefreshInterval } from './DataUtils'
 
 // App component
@@ -13,7 +13,6 @@ function App() {
   const [historicalError, setHistoricalError] = useState<GetHistoricalDataError | undefined>(
     undefined
   )
-  const chartRef = useRef<HTMLCanvasElement>(null)
 
   // Data fetching effect
   useEffect(() => {
@@ -35,12 +34,7 @@ function App() {
     return () => clearInterval(interval)
   }, [])
 
-  // Chart rendering effect
-  useEffect(() => {
-    if (historicalData && chartRef.current) {
-      renderHistoricalChart(chartRef, historicalData)
-    }
-  }, [historicalData])
+  // No longer need chart rendering effect with recharts
 
   // UI Rendering functions
   const renderPriceContent = () => {
@@ -64,7 +58,7 @@ function App() {
     return (
       <div className="chart-container">
         <h2>30-Day Price History</h2>
-        <canvas ref={chartRef} width={600} height={300} className="price-chart" />
+        <PriceHistoryChart historicalData={historicalData} width="100%" height={300} />
       </div>
     )
   }
