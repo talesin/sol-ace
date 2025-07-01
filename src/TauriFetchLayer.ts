@@ -17,7 +17,6 @@ const tauriFetch: HttpClient.HttpClient = HttpClient.make((request, url, signal,
           method: request.method,
           headers,
           body,
-          // duplex: request.body._tag === 'Stream' ? 'half' : undefined,
           signal
         } as RequestInit),
       catch: (cause) =>

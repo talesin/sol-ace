@@ -25,9 +25,6 @@ export const renderHistoricalChart = (
   const ctx = canvas.getContext('2d')
   if (!ctx) return
 
-  // Skip if no data
-  if (historicalData.length === 0) return
-
   const dimensions = getChartDimensions(canvas)
   const priceRange = calculatePriceRange(historicalData)
 
