@@ -1,51 +1,81 @@
-import { useState, useEffect } from 'react'
-import { getSolPrice, GetPriceError, PriceService } from './api'
+import { useState, useEffect, useRef } from 'react'
+import { GetPriceError, GetHistoricalDataError, HistoricalPriceData } from './PriceService'
 import './App.css'
-import { Effect, Exit, Cause } from 'effect'
-import { FetchHttpClient } from '@effect/platform'
+import { renderHistoricalChart } from './ChartUtils'
+import { fetchInitialData, setupPriceRefreshInterval } from './DataUtils'
+
+// App component
 
 function App() {
   const [price, setPrice] = useState<number | undefined>(undefined)
   const [error, setError] = useState<GetPriceError | undefined>(undefined)
+  const [historicalData, setHistoricalData] = useState<HistoricalPriceData | undefined>(undefined)
+  const [historicalError, setHistoricalError] = useState<GetHistoricalDataError | undefined>(
+    undefined
+  )
+  const chartRef = useRef<HTMLCanvasElement>(null)
 
+  // Data fetching effect
   useEffect(() => {
-    const program = getSolPrice().pipe(
-      Effect.provide(PriceService.Default),
-      Effect.provide(FetchHttpClient.layer),
-      Effect.runPromiseExit
-    )
-
-    const runFetch = () => {
-      program.then((exit: Exit.Exit<number, GetPriceError>) => {
-        if (Exit.isSuccess(exit)) {
-          setPrice(exit.value)
-          setError(undefined)
-        } else if (Cause.isFailType(exit.cause)) {
-          if (exit.cause.error instanceof GetPriceError) {
-            setError(exit.cause.error)
-          }
-          console.error(Cause.pretty(exit.cause))
-        }
-      })
+    const updatePrice = (newPrice: number | undefined, newError: GetPriceError | undefined) => {
+      setPrice(newPrice)
+      setError(newError)
     }
 
-    runFetch()
-    const interval = setInterval(runFetch, 60000) // Refresh every 60 seconds
+    const updateHistoricalData = (
+      data: HistoricalPriceData | undefined,
+      dataError: GetHistoricalDataError | undefined
+    ) => {
+      setHistoricalData(data)
+      setHistoricalError(dataError)
+    }
 
+    fetchInitialData(updatePrice, updateHistoricalData)
+    const interval = setupPriceRefreshInterval(updatePrice)
     return () => clearInterval(interval)
   }, [])
 
-  const renderContent = () => {
+  // Chart rendering effect
+  useEffect(() => {
+    if (historicalData && chartRef.current) {
+      renderHistoricalChart(chartRef, historicalData)
+    }
+  }, [historicalData])
+
+  // UI Rendering functions
+  const renderPriceContent = () => {
     if (error) {
-      return <p>Error fetching price</p>
+      return <p className="error">Error fetching price</p>
+    } else if (price === undefined) {
+      return <p className="loading">Loading...</p>
+    } else {
+      return <p className="price">${price.toFixed(2)}</p>
     }
-    if (price !== undefined) {
-      return <h1>${price.toFixed(2)}</h1>
-    }
-    return <p>Loading...</p>
   }
 
-  return <main className="container">{renderContent()}</main>
+  const renderChartSection = () => {
+    if (historicalError) {
+      return <p className="error">Error fetching historical data</p>
+    }
+    if (!historicalData) {
+      return <p className="loading">Loading chart...</p>
+    }
+
+    return (
+      <div className="chart-container">
+        <h2>30-Day Price History</h2>
+        <canvas ref={chartRef} width={600} height={300} className="price-chart" />
+      </div>
+    )
+  }
+
+  // Main component render
+  return (
+    <main className="container">
+      <div className="price-container">{renderPriceContent()}</div>
+      <div className="chart-section">{renderChartSection()}</div>
+    </main>
+  )
 }
 
 export default App
