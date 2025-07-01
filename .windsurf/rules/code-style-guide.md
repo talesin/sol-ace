@@ -97,6 +97,20 @@ const program = Effect.gen(function* () {
 program.pipe(Effect.provide(FetchHttpClient.layer), Effect.runPromise)
 ```
 
+## Prefer Effect.gen or Effect.fn over use of Effect.flatMap
+
+In most cases (not all), using `Effect.gen/Effect.fn` with `yield*` is preferable to using multiple `Effect.map`s and `Effect.mapFlat`s.
+
+```typescript
+const example = Effect.gen(function* () {
+  const result = yield* Effect.all([Effect.succeed(1), Effect.succeed(2), Effect.succeed(3)])
+})
+
+const func = Effect.fn((a: Effect<number>, b: Effect<number>, c: Effect<number>) => {
+  const result = yield * Effect.all([a, b, c])
+})
+```
+
 # Rust
 
 Rust commands must not expose unsafe code.

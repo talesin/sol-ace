@@ -6,10 +6,10 @@ import {
   GetHistoricalDataError,
   PriceService,
   HistoricalPriceData
-} from './api'
+} from './PriceService'
 import './App.css'
 import { Effect, Exit, Cause, Layer } from 'effect'
-import { FetchHttpClient } from '@effect/platform'
+import TauriFetchLayer from './TauriFetchLayer'
 
 // Chart rendering types
 type ChartDimensions = {
@@ -49,7 +49,7 @@ function App() {
 
   // Data fetching functions
   const fetchInitialData = () => {
-    const serviceLayer = Layer.provideMerge(PriceService.Default, FetchHttpClient.layer)
+    const serviceLayer = Layer.provideMerge(PriceService.Default, TauriFetchLayer)
 
     // Current price program
     const priceProgram = getSolPrice().pipe(Effect.provide(serviceLayer), Effect.runPromiseExit)
@@ -66,7 +66,7 @@ function App() {
 
   const setupPriceRefreshInterval = () => {
     return setInterval(() => {
-      const serviceLayer = Layer.provideMerge(PriceService.Default, FetchHttpClient.layer)
+      const serviceLayer = Layer.provideMerge(PriceService.Default, TauriFetchLayer)
       const priceProgram = getSolPrice().pipe(Effect.provide(serviceLayer), Effect.runPromiseExit)
       fetchCurrentPrice(priceProgram)
     }, 60000) // Refresh price every 60 seconds
