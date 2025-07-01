@@ -41,10 +41,12 @@ export const PriceHistoryChart: React.FC<{
           dataKey="date"
           tick={{ fontSize: 12 }}
           tickFormatter={(value) => {
-            // Only show some dates to avoid crowding
+            // Show dates more frequently for better interpretation
             const index = data.findIndex((item) => item.date === value)
-            return index === 0 || index === data.length - 1 || index % 5 === 0 ? value : ''
+            // Show dates at start, end, and every 3 days (or adjust as needed)
+            return index === 0 || index === data.length - 1 || index % 3 === 0 ? value : ''
           }}
+          label={{ value: 'Date', position: 'insideBottom', offset: -5 }}
         />
         <YAxis
           tick={{ fontSize: 12 }}
